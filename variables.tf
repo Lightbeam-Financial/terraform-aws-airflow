@@ -208,8 +208,6 @@ variable "private_subnet_ids" {
   default     = [""]
 }
 
-
-
 variable "webserver_instance_type" {
   description = "Instance type for the Airflow Webserver."
   type        = string
