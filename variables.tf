@@ -196,6 +196,20 @@ variable "instance_subnet_id" {
   default     = ""
 }
 
+variable "webserver_instance_subnet_id" {
+  description = "subnet id used for ec2 instance(s) running airflow webserver, if not defined, vpc's first element in subnetlist will be used"
+  type        = string
+  default     = ""
+}
+
+variable "private_subnet_ids" {
+  description = "subnet id used for ec2 instances running airflow, if not defined, vpc's first element in subnetlist will be used"
+  type        = list(string)
+  default     = [""]
+}
+
+
+
 variable "webserver_instance_type" {
   description = "Instance type for the Airflow Webserver."
   type        = string

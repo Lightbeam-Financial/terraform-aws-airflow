@@ -81,17 +81,70 @@ POLICY
 # ----------------------------------------------------------------------------------------
 # CREATE A SECURITY GROUP TO CONTROL WHAT REQUESTS CAN GO IN AND OUT OF EACH EC2 INSTANCE
 # ----------------------------------------------------------------------------------------
-
 module "sg_airflow" {
   source                   = "terraform-aws-modules/security-group/aws"
   version                  = "3.2.0"
   name                     = "${module.airflow_labels.id}-sg"
   description              = "Security group for ${module.airflow_labels.id} machines"
   vpc_id                   = data.aws_vpc.default.id
-  ingress_cidr_blocks      = var.ingress_cidr_blocks
-  ingress_rules            = ["http-80-tcp", "https-443-tcp", "ssh-tcp"]
-  ingress_with_cidr_blocks = var.ingress_with_cidr_blocks
-  egress_rules             = ["all-all"]
+
+  ingress_with_self = [
+    {
+      rule = "all-all"
+    }
+  ]
+  egress_with_self = [
+    {
+      rule = "all-all"
+    }
+  ]
+
+  tags                     = module.airflow_labels.tags
+}
+
+# ----------------------------------------------------------------------------------------
+# CREATE A SECURITY GROUP TO CONTROL Airflow webserver ingress & egress traffic
+# ----------------------------------------------------------------------------------------
+module "sg_airflow_web" {
+  source                   = "terraform-aws-modules/security-group/aws"
+  version                  = "3.2.0"
+  name                     = "${module.airflow_labels.id}-web-sg"
+  description              = "Security group for ${module.airflow_labels.id} webserver machines"
+  vpc_id                   = data.aws_vpc.default.id
+
+  ingress_with_cidr_blocks = [
+    {
+      from_port   = 8080
+      to_port     = 8080
+      protocol         = "tcp"
+      description = "Airflow webserver"
+      cidr_blocks = "185.230.126.12/32"
+    },
+  ]
+
+  tags                     = module.airflow_labels.tags
+}
+
+# ----------------------------------------------------------------------------------------
+# CREATE A SECURITY GROUP TO CONTROL Airflow webserver ingress & egress traffic
+# ----------------------------------------------------------------------------------------
+module "sg_airflow_worker" {
+  source                   = "terraform-aws-modules/security-group/aws"
+  version                  = "3.2.0"
+  name                     = "${module.airflow_labels.id}-worker-sg"
+  description              = "Security group for ${module.airflow_labels.id} worker machines"
+  vpc_id                   = data.aws_vpc.default.id
+
+  ingress_with_cidr_blocks = [
+    {
+      from_port   = 5555
+      to_port     = 5555
+      protocol         = "tcp"
+      description = "Airflow webserver"
+      cidr_blocks = "185.230.126.12/32"
+    },
+  ]
+
   tags                     = module.airflow_labels.tags
 }
 
@@ -104,8 +157,8 @@ resource "aws_instance" "airflow_webserver" {
   instance_type          = var.webserver_instance_type
   ami                    = var.ami
   key_name               = aws_key_pair.auth.id
-  vpc_security_group_ids = [module.sg_airflow.this_security_group_id]
-  subnet_id              = coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
+  vpc_security_group_ids = [module.sg_airflow_web.this_security_group_id, data.aws_security_group.default.id]
+  subnet_id              = var.webserver_instance_subnet_id ? var.webserver_instance_subnet_id : coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
   iam_instance_profile   = module.ami_instance_profile.instance_profile_name
 
   associate_public_ip_address = true
@@ -199,10 +252,10 @@ resource "aws_instance" "airflow_scheduler" {
   ami                    = var.ami
   key_name               = aws_key_pair.auth.id
   vpc_security_group_ids = [module.sg_airflow.this_security_group_id]
-  subnet_id              = coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
+  subnet_id              = length(var.private_subnet_ids) > 1 ? var.private_subnet_ids[0] : coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
   iam_instance_profile   = module.ami_instance_profile.instance_profile_name
 
-  associate_public_ip_address = true
+  associate_public_ip_address = length(var.private_subnet_ids) > 1 ? var.private_subnet_ids[0] : false : true
 
   volume_tags = module.airflow_labels_webserver.tags
 
@@ -292,11 +345,11 @@ resource "aws_instance" "airflow_worker" {
   instance_type          = var.worker_instance_type
   ami                    = var.ami
   key_name               = aws_key_pair.auth.id
-  vpc_security_group_ids = [module.sg_airflow.this_security_group_id]
-  subnet_id              = coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
+  vpc_security_group_ids = [module.sg_airflow.this_security_group_id, module.sg_airflow_worker.this_security_group_id, ]
+  subnet_id              = length(var.private_subnet_ids) > 1 ? var.private_subnet_ids[0] : coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
   iam_instance_profile   = module.ami_instance_profile.instance_profile_name
 
-  associate_public_ip_address = true
+  associate_public_ip_address = length(var.private_subnet_ids) > 1 ? var.private_subnet_ids[0] : false : true
 
   volume_tags = module.airflow_labels_webserver.tags
 
