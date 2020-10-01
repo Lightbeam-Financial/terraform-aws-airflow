@@ -349,7 +349,7 @@ resource "aws_instance" "airflow_worker" {
   subnet_id              = length(var.private_subnet_ids) > 1 ? var.private_subnet_ids[0] : coalesce("${var.instance_subnet_id}", tolist(data.aws_subnet_ids.all.ids)[0])
   iam_instance_profile   = module.ami_instance_profile.instance_profile_name
 
-  associate_public_ip_address = length(var.private_subnet_ids) > 1 ? var.private_subnet_ids[0] : false : true
+  associate_public_ip_address = length(var.private_subnet_ids) > 1 ? false : true
 
   volume_tags = module.airflow_labels_webserver.tags
 
